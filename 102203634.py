@@ -2,58 +2,42 @@ import sys
 import pandas as pd
 import numpy as np
 
-def validate_inputs(data, weights, impacts):
+def calculate_topsis(input_file, weights, impacts, output_file):
+    data = pd.read_csv(input_file)
     if len(data.columns) < 3:
-        raise ValueError("Input file must have at least three columns (one for alternatives and others for criteria).")
-
+        raise ValueError("The input file must have at least three columns (Identifier + Criteria).")
     if len(weights) != len(data.columns) - 1:
-        raise ValueError("Number of weights must match the number of criteria.")
-
+        raise ValueError("The number of weights must equal the number of criteria.")
     if len(impacts) != len(data.columns) - 1:
-        raise ValueError("Number of impacts must match the number of criteria.")
-
-    if not all(impact in ["+", "-"] for impact in impacts):
-        raise ValueError("Impacts must be either '+' (beneficial) or '-' (non-beneficial).")
-
-def normalize_matrix(matrix):
-    return matrix / np.sqrt((matrix ** 2).sum(axis=0))
-
-def calculate_ideal_solutions(weighted_matrix, impacts):
+        raise ValueError("The number of impacts must equal the number of criteria.")
+    if not set(impacts).issubset({"+", "-"}):
+        raise ValueError("Impacts must only contain '+' or '-' values.")
+    decision_matrix = data.iloc[:, 1:].values
+    normalized_matrix = decision_matrix / np.sqrt((decision_matrix ** 2).sum(axis=0))
+    weighted_matrix = normalized_matrix * weights
     ideal_best = np.where(np.array(impacts) == "+", weighted_matrix.max(axis=0), weighted_matrix.min(axis=0))
     ideal_worst = np.where(np.array(impacts) == "+", weighted_matrix.min(axis=0), weighted_matrix.max(axis=0))
-    return ideal_best, ideal_worst
-
-def calculate_topsis_scores(weighted_matrix, ideal_best, ideal_worst):
-    dist_best = np.sqrt(((weighted_matrix - ideal_best) ** 2).sum(axis=1))
-    dist_worst = np.sqrt(((weighted_matrix - ideal_worst) ** 2).sum(axis=1))
-    scores = dist_worst / (dist_best + dist_worst)
-    ranks = scores.argsort()[::-1] + 1
-    return scores, ranks
-
-def topsis(input_file, weights, impacts, output_file):
-    data = pd.read_csv(input_file)
-    validate_inputs(data, weights, impacts)
-    matrix = data.iloc[:, 1:].values
-    norm_matrix = normalize_matrix(matrix)
-    weighted_matrix = norm_matrix * weights
-    ideal_best, ideal_worst = calculate_ideal_solutions(weighted_matrix, impacts)
-    scores, ranks = calculate_topsis_scores(weighted_matrix, ideal_best, ideal_worst)
-    data["Topsis Score"] = scores
-    data["Rank"] = ranks
+    distance_best = np.sqrt(((weighted_matrix - ideal_best) ** 2).sum(axis=1))
+    distance_worst = np.sqrt(((weighted_matrix - ideal_worst) ** 2).sum(axis=1))
+    topsis_scores = distance_worst / (distance_best + distance_worst)
+    rankings = topsis_scores.argsort()[::-1] + 1
+    data["Topsis Score"] = topsis_scores
+    data["Rank"] = rankings
     data.to_csv(output_file, index=False)
-    print(f"Results saved to {output_file}")
+    print(f"TOPSIS results successfully saved to {output_file}.")
+
 if __name__ == "__main__":
     if len(sys.argv) != 5:
-        print("Usage: python <RollNumber>.py <input_file> <weights> <impacts> <output_file>")
+        print("Usage: python script.py <input_file> <weights> <impacts> <output_file>")
         sys.exit(1)
-
-    input_file = sys.argv[1]
-    weights = list(map(float, sys.argv[2].split(",")))
-    impacts = sys.argv[3].split(",")
-    output_file = sys.argv[4]
-
+    
+    input_file_path = sys.argv[1]
+    weights_list = list(map(float, sys.argv[2].split(",")))
+    impacts_list = sys.argv[3].split(",")
+    output_file_path = sys.argv[4]
+    
     try:
-        topsis(input_file, weights, impacts, output_file)
-    except Exception as e:
-        print(f"Error: {e}")
+        calculate_topsis(input_file_path, weights_list, impacts_list, output_file_path)
+    except Exception as error:
+        print(f"Error: {error}")
         sys.exit(1)
